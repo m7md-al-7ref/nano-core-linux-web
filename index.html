@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" class="lang-ar">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NanoCore — نظام تشغيل مصغّر مبني يدوياً</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:            #0c0f0a;
+    --bg-raised:     #12160f;
+    --hairline:      #262b21;
+    --paper:         #eae6d9;
+    --paper-dim:     #a7a894;
+    --amber:         #ffb400;
+    --amber-dim:     #7a5c14;
+    --phosphor:      #4f9d6e;
+    --crt-red:       #ff5b47;
+    --radius:        3px;
+  }
+
+  *{box-sizing:border-box; margin:0; padding:0;}
+
+  html{scroll-behavior:smooth;}
+
+  body{
+    background:var(--bg);
+    color:var(--paper);
+    font-family:'Tajawal', sans-serif;
+    line-height:1.7;
+    overflow-x:hidden;
+  }
+
+  html.lang-en body{ font-family:'Space Grotesk', sans-serif; }
+  html.lang-en{ direction:ltr; }
+
+  .mono{ font-family:'JetBrains Mono', monospace; }
+
+  /* --- language visibility --- */
+  .ar-only, .en-only{ }
+  html.lang-ar .en-only{ display:none !important; }
+  html.lang-en .ar-only{ display:none !important; }
+
+  /* subtle scanline texture on the whole page */
+  body::before{
+    content:"";
+    position:fixed; inset:0;
+    background:repeating-linear-gradient(
+      to bottom,
+      rgba(255,255,255,0.018) 0px,
+      rgba(255,255,255,0.018) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    pointer-events:none;
+    z-index:999;
+  }
+
+  a{ color:inherit; text-decoration:none; }
+
+  .wrap{ max-width:1040px; margin:0 auto; padding:0 28px; }
+
+  /* ===== header ===== */
+  header{
+    position:fixed; top:0; left:0; right:0; z-index:100;
+    background:rgba(12,15,10,0.86);
+    backdrop-filter:blur(6px);
+    border-bottom:1px solid var(--hairline);
+  }
+  .header-inner{
+    max-width:1040px; margin:0 auto; padding:16px 28px;
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .logo{
+    font-family:'JetBrains Mono', monospace;
+    font-weight:700; font-size:17px; letter-spacing:0.5px;
+    color:var(--paper);
+  }
+  .logo span{ color:var(--amber); }
+  .logo::before{ content:"❯ "; color:var(--phosphor); }
+
+  .lang-switch{ display:flex; gap:8px; }
+  .flag-btn{
+    width:34px; height:34px; border-radius:50%;
+    border:1.5px solid var(--hairline);
+    overflow:hidden; cursor:pointer; background:var(--bg-raised);
+    display:flex; align-items:center; justify-content:center;
+    transition:border-color .2s, transform .2s;
+    padding:0;
+  }
+  .flag-btn svg{ width:100%; height:100%; display:block; }
+  .flag-btn.active{ border-color:var(--amber); transform:scale(1.08); }
+  .flag-btn:hover{ border-color:var(--phosphor); }
+
+  /* ===== hero ===== */
+  .hero{
+    min-height:100vh;
+    display:flex; flex-direction:column; justify-content:center;
+    padding:120px 0 80px;
+    position:relative;
+  }
+  .hero-grid{
+    position:absolute; inset:0;
+    background-image:
+      linear-gradient(rgba(255,180,0,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,180,0,0.025) 1px, transparent 1px);
+    background-size:42px 42px;
+    mask-image:radial-gradient(ellipse 70% 60% at 50% 30%, black 40%, transparent 90%);
+  }
+
+  .term-window{
+    position:relative; z-index:2;
+    max-width:680px; margin:0 auto 44px;
+    background:var(--bg-raised);
+    border:1px solid var(--hairline);
+    border-radius:8px;
+    box-shadow:0 30px 80px -20px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,180,0,0.04);
+    overflow:hidden;
+  }
+  .term-bar{
+    display:flex; align-items:center; gap:7px;
+    padding:10px 14px;
+    background:#171b13;
+    border-bottom:1px solid var(--hairline);
+  }
+  .term-bar span{ width:10px; height:10px; border-radius:50%; background:#3a3f33; }
+  .term-title{
+    margin-inline-start:10px; font-family:'JetBrains Mono',monospace;
+    font-size:11px; color:var(--paper-dim); letter-spacing:0.5px;
+  }
+  .term-body{
+    padding:22px 20px 26px;
+    font-family:'JetBrains Mono', monospace;
+    font-size:13px; line-height:1.85;
+    min-height:230px;
+    color:var(--phosphor);
+    direction:ltr; text-align:left;
+  }
+  .term-body .amber{ color:var(--amber); }
+  .term-body .dim{ color:var(--paper-dim); }
+  .cursor{
+    display:inline-block; width:7px; height:14px;
+    background:var(--amber); margin-inline-start:2px;
+    animation:blink 1s steps(1) infinite; vertical-align:-2px;
+  }
+  @keyframes blink{ 50%{ opacity:0; } }
+
+  .hero-text{ position:relative; z-index:2; text-align:center; padding:0 20px; }
+  .eyebrow{
+    font-family:'JetBrains Mono',monospace; font-size:12px;
+    color:var(--phosphor); letter-spacing:2px; text-transform:uppercase;
+    margin-bottom:14px; opacity:0; transition:opacity .6s ease;
+  }
+  .eyebrow.show{ opacity:1; }
+  h1.title{
+    font-family:'JetBrains Mono', monospace;
+    font-weight:700;
+    font-size:clamp(34px, 7vw, 62px);
+    letter-spacing:-1px;
+    color:var(--paper);
+    opacity:0; transform:translateY(10px);
+    transition:opacity .7s ease, transform .7s ease;
+  }
+  html.lang-ar h1.title{ font-family:'Tajawal', sans-serif; font-weight:900; }
+  h1.title.show{ opacity:1; transform:none; }
+  h1.title .amber{ color:var(--amber); }
+
+  .tagline{
+    max-width:560px; margin:22px auto 0;
+    color:var(--paper-dim); font-size:17px;
+    opacity:0; transition:opacity .7s ease .15s;
+  }
+  .tagline.show{ opacity:1; }
+
+  .hero-ctas{
+    margin-top:38px; display:flex; gap:14px; justify-content:center; flex-wrap:wrap;
+    opacity:0; transition:opacity .7s ease .3s;
+  }
+  .hero-ctas.show{ opacity:1; }
+
+  .btn{
+    font-family:'JetBrains Mono', monospace; font-size:13px; font-weight:600;
+    padding:13px 26px; border-radius:var(--radius);
+    border:1px solid var(--amber-dim);
+    display:inline-flex; align-items:center; gap:8px;
+    cursor:pointer; transition:all .2s ease;
+  }
+  .btn-primary{ background:var(--amber); color:#161300; border-color:var(--amber); }
+  .btn-primary:hover{ background:#ffc433; }
+  .btn-ghost{ background:transparent; color:var(--paper); }
+  .btn-ghost:hover{ border-color:var(--phosphor); color:var(--phosphor); }
+
+  /* ===== sections shared ===== */
+  section{ padding:100px 0; border-top:1px solid var(--hairline); }
+  .section-head{ margin-bottom:52px; }
+  .section-num{
+    font-family:'JetBrains Mono',monospace; color:var(--phosphor);
+    font-size:13px; letter-spacing:2px; margin-bottom:10px; display:block;
+  }
+  h2{
+    font-family:'Tajawal', sans-serif; font-weight:900;
+    font-size:clamp(26px, 4vw, 36px);
+    color:var(--paper);
+  }
+  html.lang-en h2{ font-family:'Space Grotesk', sans-serif; font-weight:700; }
+  .lead{ color:var(--paper-dim); font-size:16px; max-width:620px; margin-top:14px; }
+
+  .reveal{ opacity:0; transform:translateY(18px); transition:opacity .6s ease, transform .6s ease; }
+  .reveal.show{ opacity:1; transform:none; }
+
+  /* ===== philosophy ===== */
+  .phil-grid{
+    display:grid; grid-template-columns:1fr 1fr; gap:40px;
+  }
+  @media(max-width:720px){ .phil-grid{ grid-template-columns:1fr; } }
+  .phil-card{
+    background:var(--bg-raised); border:1px solid var(--hairline);
+    border-radius:var(--radius); padding:28px;
+  }
+  .phil-card .mark{
+    font-family:'JetBrains Mono',monospace; color:var(--amber);
+    font-size:13px; margin-bottom:12px; display:block;
+  }
+  .phil-card h3{ font-size:19px; margin-bottom:10px; color:var(--paper); }
+  .phil-card p{ color:var(--paper-dim); font-size:15px; }
+
+  /* ===== how it works — boot sequence ===== */
+  .boot-steps{ position:relative; }
+  .boot-steps::before{
+    content:""; position:absolute; top:8px; bottom:8px;
+    inset-inline-start:19px; width:1px; background:var(--hairline);
+  }
+  .step{
+    position:relative; padding-inline-start:56px; padding-bottom:38px;
+  }
+  .step:last-child{ padding-bottom:0; }
+  .step-num{
+    position:absolute; inset-inline-start:0; top:0;
+    width:40px; height:40px; border-radius:50%;
+    background:var(--bg-raised); border:1px solid var(--amber-dim);
+    display:flex; align-items:center; justify-content:center;
+    font-family:'JetBrains Mono',monospace; color:var(--amber); font-size:14px; font-weight:600;
+  }
+  .step h4{
+    font-family:'JetBrains Mono',monospace; font-size:15px; color:var(--paper);
+    margin-bottom:6px; letter-spacing:0.3px;
+  }
+  .step p{ color:var(--paper-dim); font-size:14.5px; max-width:560px; }
+  .step code{
+    font-family:'JetBrains Mono',monospace; background:var(--bg-raised);
+    border:1px solid var(--hairline); border-radius:3px; padding:1px 7px;
+    color:var(--phosphor); font-size:13px;
+  }
+
+  /* ===== downloads ===== */
+  .dl-grid{ display:grid; grid-template-columns:1fr 1fr; gap:28px; }
+  @media(max-width:760px){ .dl-grid{ grid-template-columns:1fr; } }
+  .dl-card{
+    background:var(--bg-raised); border:1px solid var(--hairline);
+    border-radius:6px; padding:0; overflow:hidden;
+    display:flex; flex-direction:column;
+    transition:border-color .25s, transform .25s;
+  }
+  .dl-card:hover{ border-color:var(--amber-dim); transform:translateY(-3px); }
+  .dl-head{
+    padding:22px 24px; border-bottom:1px solid var(--hairline);
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .dl-head h3{
+    font-family:'JetBrains Mono',monospace; font-size:16px; color:var(--paper);
+  }
+  .dl-badge{
+    font-family:'JetBrains Mono',monospace; font-size:11px;
+    padding:4px 9px; border-radius:20px; letter-spacing:0.5px;
+  }
+  .badge-amber{ background:rgba(255,180,0,0.12); color:var(--amber); border:1px solid var(--amber-dim); }
+  .badge-phosphor{ background:rgba(79,157,110,0.12); color:var(--phosphor); border:1px solid #2c5c40; }
+
+  .dl-body{ padding:22px 24px 26px; flex:1; display:flex; flex-direction:column; }
+  .dl-body p{ color:var(--paper-dim); font-size:14.5px; margin-bottom:16px; }
+  .spec-list{ list-style:none; margin-bottom:22px; }
+  .spec-list li{
+    display:flex; justify-content:space-between;
+    font-family:'JetBrains Mono',monospace; font-size:12.5px;
+    padding:8px 0; border-bottom:1px dashed var(--hairline);
+    color:var(--paper-dim);
+  }
+  .spec-list li b{ color:var(--paper); font-weight:500; }
+  .dl-btn{
+    margin-top:auto;
+    text-align:center; padding:12px; border-radius:var(--radius);
+    background:var(--amber); color:#161300; font-family:'JetBrains Mono',monospace;
+    font-weight:700; font-size:13px; letter-spacing:0.3px;
+    transition:background .2s;
+  }
+  .dl-btn:hover{ background:#ffc433; }
+  .dl-note{
+    font-family:'JetBrains Mono',monospace; font-size:10.5px; color:var(--paper-dim);
+    text-align:center; margin-top:10px; opacity:0.75;
+  }
+
+  /* ===== footer ===== */
+  footer{
+    padding:50px 0 40px; border-top:1px solid var(--hairline);
+    text-align:center;
+  }
+  footer .mono{ font-size:12px; color:var(--paper-dim); letter-spacing:0.5px; }
+  footer .amber{ color:var(--amber); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="logo">nano<span>core</span></div>
+    <div class="lang-switch">
+      <button class="flag-btn active" id="btn-ar" title="العربية" aria-label="العربية">
+        <svg viewBox="0 0 30 20"><rect width="30" height="20" fill="#ce1126"/><rect y="0" width="30" height="6.66" fill="#ffffff"/><rect y="13.33" width="30" height="6.66" fill="#000000"/><text x="15" y="12" font-size="6" fill="#007a3d" text-anchor="middle" font-family="serif">الله اکبر</text></svg>
+      </button>
+      <button class="flag-btn" id="btn-en" title="English" aria-label="English">
+        <svg viewBox="0 0 30 20">
+          <rect width="30" height="20" fill="#b22234"/>
+          <rect y="1.54" width="30" height="1.54" fill="#fff"/>
+          <rect y="4.62" width="30" height="1.54" fill="#fff"/>
+          <rect y="7.69" width="30" height="1.54" fill="#fff"/>
+          <rect y="10.77" width="30" height="1.54" fill="#fff"/>
+          <rect y="13.85" width="30" height="1.54" fill="#fff"/>
+          <rect y="16.92" width="30" height="1.54" fill="#fff"/>
+          <rect width="12" height="10.77" fill="#3c3b6e"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="hero-grid"></div>
+
+  <div class="term-window">
+    <div class="term-bar">
+      <span></span><span></span><span></span>
+      <div class="term-title">boot0 — isolinux</div>
+    </div>
+    <div class="term-body" id="bootlog"></div>
+  </div>
+
+  <div class="hero-text">
+    <span class="eyebrow" id="hero-eyebrow">
+      <span class="ar-only">نظام تشغيل صغير، مبني بالكامل باليد</span>
+      <span class="en-only">a tiny operating system, built entirely by hand</span>
+    </span>
+    <h1 class="title" id="hero-title">
+      <span class="ar-only">نانو<span class="amber">كور</span></span>
+      <span class="en-only">Nano<span class="amber">Core</span></span>
+    </h1>
+    <p class="tagline" id="hero-tag">
+      <span class="ar-only">كيرنل، وinitrd مبني يدوياً، وbootloader — بلا توزيعة جاهزة وبلا اختصارات. كل بايت بالنظام له سبب.</span>
+      <span class="en-only">A kernel, a hand-assembled initrd, and a bootloader — no base distro, no shortcuts. Every byte on the system earned its place.</span>
+    </p>
+    <div class="hero-ctas" id="hero-ctas">
+      <a href="#downloads" class="btn btn-primary">
+        <span class="ar-only">حمّل النظام ↓</span>
+        <span class="en-only">Get NanoCore ↓</span>
+      </a>
+      <a href="#how" class="btn btn-ghost">
+        <span class="ar-only">شلون اشتغل؟</span>
+        <span class="en-only">How it works</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<section id="philosophy">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="section-num">01 / <span class="ar-only">الفلسفة</span><span class="en-only">PHILOSOPHY</span></span>
+      <h2><span class="ar-only">ليش سويته؟</span><span class="en-only">Why build this?</span></h2>
+      <p class="lead">
+        <span class="ar-only">مو مشروع لازم يستخدمه أحد. المشروع نفسه هو الهدف: تفهم كل طبقة بين الضغط على زر التشغيل وظهور أول حرف على الشاشة.</span>
+        <span class="en-only">This isn't meant to replace anything you already run. The build itself is the point — understanding every layer between pressing power and the first character on screen.</span>
+      </p>
+    </div>
+
+    <div class="phil-grid">
+      <div class="phil-card reveal">
+        <span class="mark">01</span>
+        <h3><span class="ar-only">ما فيه شي مخفي</span><span class="en-only">Nothing hidden</span></h3>
+        <p>
+          <span class="ar-only">ما كو توزيعة أم تحته. الكيرنل، سكربت الإقلاع، الموديولات — كلها انتخبتها وربطتها بإيدي، بايت ببايت، عشان أعرف بالضبط شنو يشتغل ولّيش.</span>
+          <span class="en-only">There's no parent distro underneath. The kernel, the init script, the modules — I chose and wired every one by hand, so I know exactly what runs and why.</span>
+        </p>
+      </div>
+      <div class="phil-card reveal">
+        <span class="mark">02</span>
+        <h3><span class="ar-only">الصغر مب نقص</span><span class="en-only">Small is not missing</span></h3>
+        <p>
+          <span class="ar-only">النسخة الأصغر توزن أقل من ٢.٣ ميجا وتقلعك على تيرمنال شغال خلال ثواني. كل ميجا زايدة لازم تدافع عن وجودها.</span>
+          <span class="en-only">The smallest build weighs under 2.3&nbsp;MB and drops you into a working shell in seconds. Every extra megabyte has to earn its place.</span>
+        </p>
+      </div>
+      <div class="phil-card reveal">
+        <span class="mark">03</span>
+        <h3><span class="ar-only">BIOS، مو UEFI</span><span class="en-only">BIOS, not UEFI</span></h3>
+        <p>
+          <span class="ar-only">اخترت isolinux قصداً — يشتغل على أي جهاز x86 تقريباً يدعم BIOS/Legacy، من أجهزة قديمة جداً لين أجهزة اليوم بوضع التوافق.</span>
+          <span class="en-only">isolinux was a deliberate choice — it boots on nearly any x86 machine with legacy BIOS support, from very old hardware to today's machines in compatibility mode.</span>
+        </p>
+      </div>
+      <div class="phil-card reveal">
+        <span class="mark">04</span>
+        <h3><span class="ar-only">مفتوح تسويه انته</span><span class="en-only">Built to be forked</span></h3>
+        <p>
+          <span class="ar-only">مب نظام نهائي مقفل. init script واحد بسيط تقدر تفتحه وتغيره، وتبني نسختك الخاصة فوگه.</span>
+          <span class="en-only">This isn't a closed, finished product. It's one simple init script you can open, edit, and build your own version on top of.</span>
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="section-num">02 / <span class="ar-only">طريقة العمل</span><span class="en-only">HOW IT WORKS</span></span>
+      <h2><span class="ar-only">من ضغطة الزر لين الشل</span><span class="en-only">From power button to shell</span></h2>
+      <p class="lead">
+        <span class="ar-only">سلسلة إقلاع حقيقية، خطوة بخطوة — نفس السلسلة اللي تصير كل مرة تشغل فيها الجهاز.</span>
+        <span class="en-only">A real boot chain, step by step — the same sequence that runs every single time the machine powers on.</span>
+      </p>
+    </div>
+
+    <div class="boot-steps">
+      <div class="step reveal">
+        <div class="step-num">1</div>
+        <h4>BIOS / SeaBIOS</h4>
+        <p>
+          <span class="ar-only">الفيرموير يفحص الأجهزة ويسلّم التحكم لأول قطاع إقلاع يلقاه بالـCD/USB.</span>
+          <span class="en-only">Firmware initializes hardware and hands control to the first bootable sector it finds on the CD/USB.</span>
+        </p>
+      </div>
+      <div class="step reveal">
+        <div class="step-num">2</div>
+        <h4>ISOLINUX <span style="color:var(--paper-dim);font-weight:400;">bootloader</span></h4>
+        <p>
+          <span class="ar-only">يقرأ <code>isolinux.cfg</code>، يحمّل الكيرنل والـ initrd للذاكرة، ويقفز لهم.</span>
+          <span class="en-only">Reads <code>isolinux.cfg</code>, loads the kernel and initrd into memory, and jumps to them.</span>
+        </p>
+      </div>
+      <div class="step reveal">
+        <div class="step-num">3</div>
+        <h4>vmlinuz <span style="color:var(--paper-dim);font-weight:400;">— Linux 6.6.0</span></h4>
+        <p>
+          <span class="ar-only">الكيرنل يشتغل، يهيئ الذاكرة والمعالج، ويفك ضغط <code>initrd.gz</code> كنظام ملفات مؤقت بالرام.</span>
+          <span class="en-only">The kernel boots, initializes memory and CPU, and unpacks <code>initrd.gz</code> as a temporary in-RAM filesystem.</span>
+        </p>
+      </div>
+      <div class="step reveal">
+        <div class="step-num">4</div>
+        <h4><code>/init</code> <span style="color:var(--paper-dim);font-weight:400;">— busybox sh</span></h4>
+        <p>
+          <span class="ar-only">سكربت شل واحد يركب <code>/proc /sys /dev</code>، ويحمّل موديولات USB/HID للماوس ولوحة المفاتيح.</span>
+          <span class="en-only">One shell script mounts <code>/proc /sys /dev</code>, and loads USB/HID kernel modules for mouse and keyboard.</span>
+        </p>
+      </div>
+      <div class="step reveal">
+        <div class="step-num">5</div>
+        <h4><span class="ar-only">القرار الأخير</span><span class="en-only">The final fork</span></h4>
+        <p>
+          <span class="ar-only">Micro يوديك على شل نصي مباشرة. GUI يشغل <code>xinit</code> → <code>Xorg</code> → <code>dwm</code> + <code>xterm</code> فوگ نفس الـ init بالضبط.</span>
+          <span class="en-only">Micro drops you straight into a text shell. GUI runs <code>xinit</code> → <code>Xorg</code> → <code>dwm</code> + <code>xterm</code> — on the exact same init.</span>
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="downloads">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="section-num">03 / <span class="ar-only">التحميل</span><span class="en-only">DOWNLOAD</span></span>
+      <h2><span class="ar-only">اختار نسختك</span><span class="en-only">Choose your build</span></h2>
+      <p class="lead">
+        <span class="ar-only">نفس النواة، نفس الفلسفة — بس فرق شنو يشتغل فوگ init الأخير.</span>
+        <span class="en-only">Same core, same philosophy — only the final layer on top of init differs.</span>
+      </p>
+    </div>
+
+    <div class="dl-grid">
+      <div class="dl-card reveal">
+        <div class="dl-head">
+          <h3>NanoCore Micro</h3>
+          <span class="dl-badge badge-phosphor mono ar-only">تيرمنال بس</span>
+          <span class="dl-badge badge-phosphor mono en-only">terminal only</span>
+        </div>
+        <div class="dl-body">
+          <p>
+            <span class="ar-only">لا واجهة، لا زوائد. تقلع مباشرة على شل busybox جاهز للعمل.</span>
+            <span class="en-only">No interface, no extras. Boots straight into a ready busybox shell.</span>
+          </p>
+          <ul class="spec-list">
+            <li><span class="ar-only">الحجم</span><span class="en-only">Size</span> <b>2.24&nbsp;MB</b></li>
+            <li><span class="ar-only">المعمارية</span><span class="en-only">Architecture</span> <b>amd64 / x86-64</b></li>
+            <li><span class="ar-only">الإقلاع</span><span class="en-only">Boot</span> <b>BIOS · isolinux</b></li>
+            <li><span class="ar-only">بوت لابل</span><span class="en-only">Boot label</span> <b>nanocoremicro</b></li>
+          </ul>
+          <a href="https://raw.githubusercontent.com/m7md-al-7ref/nano-core-linux/main/nano_core.iso" class="dl-btn" download="nano_core.iso">
+            <span class="ar-only">تحميل nano_core.iso</span>
+            <span class="en-only">Download nano_core.iso</span>
+          </a>
+          <div class="dl-note ar-only">من مستودع المشروع على GitHub</div>
+          <div class="dl-note en-only">served directly from the project's GitHub repo</div>
+        </div>
+      </div>
+
+      <div class="dl-card reveal">
+        <div class="dl-head">
+          <h3>NanoCore GUI</h3>
+          <span class="dl-badge badge-amber mono ar-only">واجهة رسومية</span>
+          <span class="dl-badge badge-amber mono en-only">graphical</span>
+        </div>
+        <div class="dl-body">
+          <p>
+            <span class="ar-only">X + dwm + xterm فوگ نفس الأساس. تايتلاتها وسجل الإقلاع بالعربي.</span>
+            <span class="en-only">X + dwm + xterm on the exact same base. Titles and boot log in Arabic.</span>
+          </p>
+          <ul class="spec-list">
+            <li><span class="ar-only">الحجم</span><span class="en-only">Size</span> <b>14.13&nbsp;MB</b></li>
+            <li><span class="ar-only">المعمارية</span><span class="en-only">Architecture</span> <b>amd64 / x86-64</b></li>
+            <li><span class="ar-only">مدير النوافذ</span><span class="en-only">Window manager</span> <b>dwm</b></li>
+            <li><span class="ar-only">بوت لابل</span><span class="en-only">Boot label</span> <b>nanocoregui-amd64</b></li>
+          </ul>
+          <a href="https://raw.githubusercontent.com/m7md-al-7ref/nano-core-linux/main/nanocore-gui-amd64.iso" class="dl-btn" download="nanocore-gui-amd64.iso">
+            <span class="ar-only">تحميل nanocore-gui-amd64.iso</span>
+            <span class="en-only">Download nanocore-gui-amd64.iso</span>
+          </a>
+          <div class="dl-note ar-only">من مستودع المشروع على GitHub</div>
+          <div class="dl-note en-only">served directly from the project's GitHub repo</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="mono" style="margin-bottom:14px;">
+      <a href="https://github.com/m7md-al-7ref/nano-core-linux" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;color:var(--paper);border:1px solid var(--hairline);padding:9px 18px;border-radius:20px;transition:border-color .2s,color .2s;">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+        <span class="ar-only">الكود المصدري على GitHub</span>
+        <span class="en-only">Source on GitHub</span>
+      </a>
+    </div>
+    <div class="mono">
+      <span class="ar-only">nanocore © <span class="amber">2026</span> — مبني يدوياً، سطر بسطر</span>
+      <span class="en-only">nanocore © <span class="amber">2026</span> — built by hand, line by line</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // ---------- language toggle ----------
+  const html = document.documentElement;
+  const btnAr = document.getElementById('btn-ar');
+  const btnEn = document.getElementById('btn-en');
+
+  function setLang(lang){
+    html.classList.remove('lang-ar','lang-en');
+    html.classList.add('lang-' + lang);
+    html.setAttribute('lang', lang);
+    html.setAttribute('dir', lang === 'ar' ? 'rtl' : 'ltr');
+    btnAr.classList.toggle('active', lang === 'ar');
+    btnEn.classList.toggle('active', lang === 'en');
+  }
+  btnAr.addEventListener('click', () => setLang('ar'));
+  btnEn.addEventListener('click', () => setLang('en'));
+
+  // ---------- boot log typing animation ----------
+  const bootLines = [
+    { t: 'SeaBIOS (version 1.16.3)', c: '' },
+    { t: 'Booting from DVD/CD...', c: 'dim' },
+    { t: 'ISOLINUX 6.04 ... Copyright (C) H. Peter Anvin', c: 'dim' },
+    { t: 'Loading /vmlinuz... ', c: '', suffix: 'ok', suffixClass:'amber' },
+    { t: 'Loading /initrd.gz... ', c: '', suffix: 'ok', suffixClass:'amber' },
+    { t: '[    0.000000] Linux version 6.6.0', c: 'dim' },
+    { t: 'mounting /proc /sys /dev ...', c: 'dim' },
+    { t: 'detecting input devices ...', c: 'dim' },
+    { t: 'Welcome to NanoCore', c: 'amber' },
+  ];
+
+  const logEl = document.getElementById('bootlog');
+  const eyebrow = document.getElementById('hero-eyebrow');
+  const title = document.getElementById('hero-title');
+  const tag = document.getElementById('hero-tag');
+  const ctas = document.getElementById('hero-ctas');
+
+  async function typeLine(line){
+    const row = document.createElement('div');
+    logEl.appendChild(row);
+    const span = document.createElement('span');
+    if(line.c) span.className = line.c;
+    row.appendChild(span);
+
+    for(let i=0;i<line.t.length;i++){
+      span.textContent += line.t[i];
+      await new Promise(r => setTimeout(r, 8 + Math.random()*10));
+    }
+    if(line.suffix){
+      const s = document.createElement('span');
+      s.className = line.suffixClass || '';
+      s.textContent = line.suffix;
+      row.appendChild(s);
+    }
+  }
+
+  async function runBoot(){
+    const cursor = document.createElement('span');
+    cursor.className = 'cursor';
+    logEl.appendChild(cursor);
+
+    for(const line of bootLines){
+      cursor.remove();
+      await typeLine(line);
+      logEl.appendChild(cursor);
+      await new Promise(r => setTimeout(r, 90));
+    }
+    cursor.remove();
+
+    eyebrow.classList.add('show');
+    await new Promise(r => setTimeout(r, 120));
+    title.classList.add('show');
+    await new Promise(r => setTimeout(r, 120));
+    tag.classList.add('show');
+    await new Promise(r => setTimeout(r, 120));
+    ctas.classList.add('show');
+  }
+  runBoot();
+
+  // ---------- scroll reveal ----------
+  const revealEls = document.querySelectorAll('.reveal');
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if(e.isIntersecting) e.target.classList.add('show'); });
+  }, { threshold: 0.15 });
+  revealEls.forEach(el => io.observe(el));
+
+  // respect reduced motion
+  if(window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+    document.querySelectorAll('.reveal, .eyebrow, .title, .tagline, .hero-ctas').forEach(el => el.classList.add('show'));
+  }
+</script>
+
+</body>
+</html>
